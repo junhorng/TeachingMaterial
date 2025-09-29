@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snell定律 - 光的折射互動教學</title>
+    <style>
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        h3 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 1em;
+        }
+        
+        .main-content {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .diagram-section {
+            flex: 2;
+            min-width: 400px;
+        }
+        
+        .controls-section {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .diagram-container {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #e9ecef;
+        }
+        
+        canvas {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: linear-gradient(to bottom, #87CEEB 0%, #87CEEB 50%, #F0F8FF 50%, #F0F8FF 100%);
+        }
+        
+        .controls {
+            background: #e8f4f8;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 5px solid #3498db;
+        }
+        
+        .control-group {
+            margin: 20px 0;
+        }
+        
+        .control-row {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+        }
+        
+        label {
+            font-weight: bold;
+            color: #2c3e50;
+            min-width: 120px;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            margin: 0 15px;
+        }
+        
+        .value-display {
+            background: #3498db;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            min-width: 60px;
+            text-align: center;
+        }
+        
+        .formula-box {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #f39c12;
+            text-align: center;
+        }
+        
+        .formula {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 10px 0;
+        }
+        
+        .calculation-box {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #28a745;
+        }
+        
+        .info-box {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            border-left: 5px solid #dc3545;
+        }
+        
+        .concept-explanation {
+            background: #e1ecf4;
+            border: 1px solid #bee5eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #17a2b8;
+        }
+        
+        .material-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+        
+        .material-btn {
+            padding: 8px 15px;
+            border: 2px solid #3498db;
+            background: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+        
+        .material-btn.active {
+            background: #3498db;
+            color: white;
+        }
+        
+        .material-btn:hover {
+            background: #2980b9;
+            color: white;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .diagram-section, .controls-section {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌈 Snell定律 - 光的折射原理</h1>
+        <h3> 作者：亞東科技大學通訊工程系 陳俊宏</h3>
+        <div class="concept-explanation">
+            <h2>📚 什麼是Snell定律？</h2>
+            <p><strong>Snell定律</strong>描述光線從一種介質進入另一種介質時，入射角和折射角的數學關係。</p>
+            <p>當光線穿越不同密度的介質時，會發生<strong>折射現象</strong>，光線方向會改變。</p>
+        </div>
+        
+        <div class="formula-box">
+            <div class="formula">n₁ sin θ₁ = n₂ sin θ₂</div>
+            <p>n₁, n₂ = 兩種介質的折射率　｜　θ₁ = 入射角　｜　θ₂ = 折射角</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="diagram-section">
+                <div class="diagram-container">
+                    <h3>📊 光線折射示意圖</h3>
+                    <canvas id="refractionCanvas" width="600" height="500"></canvas>
+                </div>
+            </div>
+            
+            <div class="controls-section">
+                <div class="controls">
+                    <h3>🎛️ 調整參數</h3>
+                    
+                    <div class="control-group">
+                        <label>入射角 θ₁:</label>
+                        <div class="control-row">
+                            <input type="range" id="incidentAngleSlider" min="0" max="89" value="30" step="1">
+                            <span class="value-display" id="incidentAngleValue">30°</span>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>介質1 (上方):</label>
+                        <div class="material-selector">
+                            <button class="material-btn active" data-n1="1.00" data-name="空氣">空氣</button>
+                            <button class="material-btn" data-n1="1.33" data-name="水">水</button>
+                            <button class="material-btn" data-n1="1.52" data-name="玻璃">玻璃</button>
+                            <button class="material-btn" data-n1="custom" data-name="自定義">自定義</button>
+                        </div>
+                        <div class="control-row">
+                            <label>折射率 n₁:</label>
+                            <input type="number" id="n1Custom" min="1.00" max="2.00" step="0.01" value="1.00" 
+                                   style="display: none; padding: 5px; border: 1px solid #ddd; border-radius: 5px; width: 80px; margin-right: 10px;">
+                            <span class="value-display" id="n1Value">1.00</span>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>介質2 (下方):</label>
+                        <div class="material-selector">
+                            <button class="material-btn" data-n2="1.00" data-name="空氣">空氣</button>
+                            <button class="material-btn active" data-n2="1.33" data-name="水">水</button>
+                            <button class="material-btn" data-n2="1.52" data-name="玻璃">玻璃</button>
+                            <button class="material-btn" data-n2="2.42" data-name="鑽石">鑽石</button>
+                            <button class="material-btn" data-n2="custom" data-name="自定義">自定義</button>
+                        </div>
+                        <div class="control-row">
+                            <label>折射率 n₂:</label>
+                            <input type="number" id="n2Custom" min="1.00" max="2.00" step="0.01" value="1.33" 
+                                   style="display: none; padding: 5px; border: 1px solid #ddd; border-radius: 5px; width: 80px; margin-right: 10px;">
+                            <span class="value-display" id="n2Value">1.33</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="calculation-box">
+                    <h3>🧮 計算結果</h3>
+                    <p><strong>折射角 θ₂ = <span id="refractionAngle">22.1°</span></strong></p>
+                    <p>sin θ₁ = <span id="sinTheta1">0.500</span></p>
+                    <p>sin θ₂ = <span id="sinTheta2">0.376</span></p>
+                    <p>n₁ sin θ₁ = <span id="leftSide">0.500</span></p>
+                    <p>n₂ sin θ₂ = <span id="rightSide">0.500</span></p>
+                </div>
+                
+                <div class="info-box" id="criticalAngleInfo" style="display: none;">
+                    <h3>⚠️ 全反射現象</h3>
+                    <p>當入射角大於臨界角時，光線無法進入第二介質，會發生全反射。</p>
+                    <p>臨界角 θc = <span id="criticalAngle">48.6°</span></p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="concept-explanation">
+            <h3>💡 重要概念</h3>
+            <h4>🔍 折射現象的原理：</h4>
+            <ul>
+                <li><strong>光速變化</strong>：光在不同介質中的傳播速度不同</li>
+                <li><strong>方向改變</strong>：當光速改變時，光線方向也會改變</li>
+                <li><strong>折射率</strong>：n = c/v（真空中光速/介質中光速）</li>
+            </ul>
+            
+            <h4>📏 角度測量：</h4>
+            <ul>
+                <li><strong>入射角</strong>：入射光線與法線的夾角</li>
+                <li><strong>折射角</strong>：折射光線與法線的夾角</li>
+                <li><strong>法線</strong>：垂直於界面的直線</li>
+            </ul>
+            
+            <h4>🌟 實際應用：</h4>
+            <ul>
+                <li><strong>透鏡設計</strong>：相機、眼鏡、顯微鏡</li>
+                <li><strong>光纖通訊</strong>：利用全反射原理</li>
+                <li><strong>彩虹現象</strong>：水滴中的光線折射和反射</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('refractionCanvas');
+        const ctx = canvas.getContext('2d');
+        const incidentAngleSlider = document.getElementById('incidentAngleSlider');
+        const incidentAngleValue = document.getElementById('incidentAngleValue');
+        const n1Value = document.getElementById('n1Value');
+        const n2Value = document.getElementById('n2Value');
+        const n1Custom = document.getElementById('n1Custom');
+        const n2Custom = document.getElementById('n2Custom');
+        const refractionAngle = document.getElementById('refractionAngle');
+        const sinTheta1 = document.getElementById('sinTheta1');
+        const sinTheta2 = document.getElementById('sinTheta2');
+        const leftSide = document.getElementById('leftSide');
+        const rightSide = document.getElementById('rightSide');
+        const criticalAngleInfo = document.getElementById('criticalAngleInfo');
+        const criticalAngle = document.getElementById('criticalAngle');
+        
+        let n1 = 1.00; // 空氣
+        let n2 = 1.33; // 水
+        let incidentAngle = 30;
+        let n1IsCustom = false;
+        let n2IsCustom = false;
+        
+        function drawRefraction() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const rayLength = 150;
+            
+            // 繪製界面
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(canvas.width, centerY);
+            ctx.stroke();
+            
+            // 繪製法線
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - rayLength - 50);
+            ctx.lineTo(centerX, centerY + rayLength + 50);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // 計算角度（轉換為弧度）
+            const theta1Rad = (incidentAngle * Math.PI) / 180;
+            const sinTheta1Val = Math.sin(theta1Rad);
+            
+            // 使用Snell定律計算折射角
+            const sinTheta2Val = (n1 * sinTheta1Val) / n2;
+            let theta2Rad = 0;
+            let totalInternalReflection = false;
+            
+            if (sinTheta2Val > 1) {
+                // 全反射
+                totalInternalReflection = true;
+                theta2Rad = Math.asin(1); // 90度
+            } else {
+                theta2Rad = Math.asin(sinTheta2Val);
+            }
+            
+            const theta2Deg = (theta2Rad * 180) / Math.PI;
+            
+            // 繪製入射光線
+            const incidentEndX = centerX - rayLength * Math.sin(theta1Rad);
+            const incidentEndY = centerY - rayLength * Math.cos(theta1Rad);
+            
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(incidentEndX, incidentEndY);
+            ctx.lineTo(centerX, centerY);
+            ctx.stroke();
+            
+            // 繪製箭頭（入射光線）
+            drawArrow(ctx, incidentEndX, incidentEndY, centerX, centerY, '#e74c3c');
+            
+            if (!totalInternalReflection) {
+                // 繪製折射光線
+                const refractedEndX = centerX + rayLength * Math.sin(theta2Rad);
+                const refractedEndY = centerY + rayLength * Math.cos(theta2Rad);
+                
+                ctx.strokeStyle = '#27ae60';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(refractedEndX, refractedEndY);
+                ctx.stroke();
+                
+                // 繪製箭頭（折射光線）
+                drawArrow(ctx, centerX, centerY, refractedEndX, refractedEndY, '#27ae60');
+            } else {
+                // 繪製反射光線
+                const reflectedEndX = centerX + rayLength * Math.sin(theta1Rad);
+                const reflectedEndY = centerY - rayLength * Math.cos(theta1Rad);
+                
+                ctx.strokeStyle = '#9b59b6';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(reflectedEndX, reflectedEndY);
+                ctx.stroke();
+                
+                // 繪製箭頭（反射光線）
+                drawArrow(ctx, centerX, centerY, reflectedEndX, reflectedEndY, '#9b59b6');
+            }
+            
+            // 繪製角度弧線
+            drawAngleArc(ctx, centerX, centerY, theta1Rad, 60, '#e74c3c', true);
+            if (!totalInternalReflection) {
+                drawAngleArc(ctx, centerX, centerY, theta2Rad, 80, '#27ae60', false);
+            }
+            
+            // 添加標籤
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 16px Microsoft JhengHei';
+            ctx.textAlign = 'center';
+            
+            // 介質標籤
+            ctx.fillText(`介質 1 (n₁ = ${n1.toFixed(2)})`, centerX, 30);
+            ctx.fillText(`介質 2 (n₂ = ${n2.toFixed(2)})`, centerX, canvas.height - 15);
+            
+            // 角度標籤
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText(`θ₁ = ${incidentAngle}°`, centerX - 80, centerY - 40);
+            
+            if (!totalInternalReflection) {
+                ctx.fillStyle = '#27ae60';
+                ctx.fillText(`θ₂ = ${theta2Deg.toFixed(1)}°`, centerX + 80, centerY + 60);
+            } else {
+                ctx.fillStyle = '#9b59b6';
+                ctx.fillText('全反射', centerX + 80, centerY - 40);
+            }
+            
+            // 法線標籤
+            ctx.fillStyle = '#666';
+            ctx.font = '14px Microsoft JhengHei';
+            ctx.fillText('法線', centerX + 15, centerY - 100);
+            
+            // 更新計算結果
+            updateCalculations(sinTheta1Val, sinTheta2Val, theta2Deg, totalInternalReflection);
+        }
+        
+        function drawArrow(ctx, fromX, fromY, toX, toY, color) {
+            const headlen = 15;
+            const dx = toX - fromX;
+            const dy = toY - fromY;
+            const angle = Math.atan2(dy, dx);
+            
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(toX, toY);
+            ctx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        function drawAngleArc(ctx, centerX, centerY, angle, radius, color, isIncident) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            if (isIncident) {
+                ctx.arc(centerX, centerY, radius, -Math.PI/2 - angle, -Math.PI/2);
+            } else {
+                ctx.arc(centerX, centerY, radius, Math.PI/2, Math.PI/2 + angle);
+            }
+            ctx.stroke();
+        }
+        
+        function updateCalculations(sinTheta1Val, sinTheta2Val, theta2Deg, totalInternalReflection) {
+            incidentAngleValue.textContent = incidentAngle + '°';
+            
+            if (!totalInternalReflection) {
+                refractionAngle.textContent = theta2Deg.toFixed(1) + '°';
+                sinTheta1.textContent = sinTheta1Val.toFixed(3);
+                sinTheta2.textContent = sinTheta2Val.toFixed(3);
+                leftSide.textContent = (n1 * sinTheta1Val).toFixed(3);
+                rightSide.textContent = (n2 * sinTheta2Val).toFixed(3);
+            } else {
+                refractionAngle.textContent = '全反射';
+                sinTheta1.textContent = sinTheta1Val.toFixed(3);
+                sinTheta2.textContent = '無折射';
+                leftSide.textContent = (n1 * sinTheta1Val).toFixed(3);
+                rightSide.textContent = '> ' + n2.toFixed(2);
+            }
+            
+            // 檢查是否需要顯示臨界角信息
+            if (n1 > n2) {
+                const criticalAngleRad = Math.asin(n2 / n1);
+                const criticalAngleDeg = (criticalAngleRad * 180) / Math.PI;
+                criticalAngle.textContent = criticalAngleDeg.toFixed(1) + '°';
+                criticalAngleInfo.style.display = 'block';
+            } else {
+                criticalAngleInfo.style.display = 'none';
+            }
+        }
+        
+        function updateValues() {
+            incidentAngle = parseFloat(incidentAngleSlider.value);
+            drawRefraction();
+        }
+        
+        function setupMaterialButtons() {
+            // 介質1按鈕
+            const n1Buttons = document.querySelectorAll('[data-n1]');
+            n1Buttons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    n1Buttons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    if (btn.dataset.n1 === 'custom') {
+                        n1IsCustom = true;
+                        n1Custom.style.display = 'inline';
+                        n1 = parseFloat(n1Custom.value);
+                    } else {
+                        n1IsCustom = false;
+                        n1Custom.style.display = 'none';
+                        n1 = parseFloat(btn.dataset.n1);
+                    }
+                    
+                    n1Value.textContent = n1.toFixed(2);
+                    drawRefraction();
+                });
+            });
+            
+            // 介質2按鈕
+            const n2Buttons = document.querySelectorAll('[data-n2]');
+            n2Buttons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    n2Buttons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    if (btn.dataset.n2 === 'custom') {
+                        n2IsCustom = true;
+                        n2Custom.style.display = 'inline';
+                        n2 = parseFloat(n2Custom.value);
+                    } else {
+                        n2IsCustom = false;
+                        n2Custom.style.display = 'none';
+                        n2 = parseFloat(btn.dataset.n2);
+                    }
+                    
+                    n2Value.textContent = n2.toFixed(2);
+                    drawRefraction();
+                });
+            });
+            
+            // 自定義輸入框事件
+            n1Custom.addEventListener('input', () => {
+                if (n1IsCustom) {
+                    const value = parseFloat(n1Custom.value);
+                    if (value >= 1.00 && value <= 2.00) {
+                        n1 = value;
+                        n1Value.textContent = n1.toFixed(2);
+                        drawRefraction();
+                    }
+                }
+            });
+            
+            n2Custom.addEventListener('input', () => {
+                if (n2IsCustom) {
+                    const value = parseFloat(n2Custom.value);
+                    if (value >= 1.00 && value <= 2.00) {
+                        n2 = value;
+                        n2Value.textContent = n2.toFixed(2);
+                        drawRefraction();
+                    }
+                }
+            });
+        }
+        
+        // 事件監聽器
+        incidentAngleSlider.addEventListener('input', updateValues);
+        
+        // 初始化
+        setupMaterialButtons();
+        drawRefraction();
+    </script>
+</body>
+</html>
