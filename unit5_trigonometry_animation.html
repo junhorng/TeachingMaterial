@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圓周運動與三角函數</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        h3 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 1em;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        .main-title {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .description {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .description-text {
+            flex: 1;
+            text-align: left;
+        }
+        
+        .description-text p {
+            margin: 5px 0;
+        }
+        
+        .triangle-diagram {
+            flex-shrink: 0;
+        }
+        
+        #triangleCanvas {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        
+        .highlight {
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .sin-color {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+        
+        .cos-color {
+            color: #4ecdc4;
+            font-weight: bold;
+        }
+        
+        .canvas-wrapper {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        
+        canvas {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            padding-top: 20px;
+            border-top: 2px solid #eee;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background: #667eea;
+            color: white;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #5568d3;
+        }
+        
+        label {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input[type="range"] {
+            width: 150px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="main-title">圓周運動與三角函數</h1>
+        <h3> 作者：亞東科技大學通訊工程系 陳俊宏</h3>
+        <div class="description">
+            <div class="description-text">
+                <p>這個動畫展示了圓周運動與三角函數的關係：</p>
+                <p>• 左側：點在單位圓上<span class="highlight">逆時鐘旋轉</span>，角度 θ 以<span class="highlight">弧度</span>為單位</p>
+                <p>• 右側：<span class="sin-color">紅色曲線</span>是正弦波 sin(θ)，<span class="cos-color">青色曲線</span>是餘弦波 cos(θ)</p>
+                <p>• 圓上點的<span class="sin-color">垂直位置</span>對應正弦值，<span class="cos-color">水平位置</span>對應餘弦值</p>
+            </div>
+            <div class="triangle-diagram">
+                <canvas id="triangleCanvas" width="300" height="300"></canvas>
+            </div>
+        </div>
+        
+        <div class="canvas-wrapper">
+            <canvas id="mainCanvas" width="900" height="400"></canvas>
+        </div>
+        
+        <div class="controls">
+            <button id="pauseBtn">暫停</button>
+            <button id="resetBtn">重置</button>
+            <label for="speedControl">速度:</label>
+            <input type="range" id="speedControl" min="0.1" max="5" step="0.1" value="1">
+            <span id="speedValue">1x</span>
+        </div>
+    </div>
+
+    <script>
+        // 繪製三角形示意圖
+        const triangleCanvas = document.getElementById('triangleCanvas');
+        const triCtx = triangleCanvas.getContext('2d');
+        
+        function drawTriangleDiagram() {
+            const centerX = 150;
+            const centerY = 230;
+            const radius = 120;
+            const angle = Math.PI / 6; // 30度
+            
+            const endX = centerX + radius * Math.cos(angle);
+            const endY = centerY - radius * Math.sin(angle);
+            
+            // 畫圓弧
+            triCtx.beginPath();
+            triCtx.arc(centerX, centerY, radius, -angle, 0);
+            triCtx.strokeStyle = '#ddd';
+            triCtx.lineWidth = 2;
+            triCtx.stroke();
+            
+            // 畫半徑（斜邊）
+            triCtx.beginPath();
+            triCtx.moveTo(centerX, centerY);
+            triCtx.lineTo(endX, endY);
+            triCtx.strokeStyle = '#667eea';
+            triCtx.lineWidth = 4;
+            triCtx.stroke();
+            
+            // 畫 cos 邊（水平）
+            triCtx.beginPath();
+            triCtx.moveTo(centerX, centerY);
+            triCtx.lineTo(endX, centerY);
+            triCtx.strokeStyle = '#4ecdc4';
+            triCtx.lineWidth = 4;
+            triCtx.stroke();
+            
+            // 畫 sin 邊（垂直）
+            triCtx.beginPath();
+            triCtx.moveTo(endX, centerY);
+            triCtx.lineTo(endX, endY);
+            triCtx.strokeStyle = '#ff6b6b';
+            triCtx.lineWidth = 4;
+            triCtx.stroke();
+            
+            // 畫直角符號
+            const rectSize = 15;
+            triCtx.beginPath();
+            triCtx.moveTo(endX - rectSize, centerY);
+            triCtx.lineTo(endX - rectSize, centerY - rectSize);
+            triCtx.lineTo(endX, centerY - rectSize);
+            triCtx.strokeStyle = '#999';
+            triCtx.lineWidth = 2;
+            triCtx.stroke();
+            
+            // 畫角度標記
+            triCtx.beginPath();
+            triCtx.arc(centerX, centerY, 35, -angle, 0);
+            triCtx.strokeStyle = '#667eea';
+            triCtx.lineWidth = 2.5;
+            triCtx.stroke();
+            
+            // 標籤
+            triCtx.font = 'bold 20px Arial';
+            triCtx.fillStyle = '#667eea';
+            triCtx.fillText('θ', centerX + 42, centerY - 10);
+            triCtx.fillText('1', centerX + 45, centerY - 70);
+            
+            triCtx.fillStyle = '#4ecdc4';
+            triCtx.fillText('cos(θ)', centerX + 35, centerY + 28);
+            
+            triCtx.fillStyle = '#ff6b6b';
+            triCtx.fillText('sin(θ)', endX + 15, centerY - 40);
+        }
+        
+        drawTriangleDiagram();
+        
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let angle = 0;
+        let isPaused = false;
+        let speed = 1;
+        let history = [];
+        const maxHistory = 300;
+        
+        // 圓的參數
+        const circleRadius = 120;
+        const circleCenterX = 180;
+        const circleCenterY = canvas.height / 2;
+        
+        // 波形圖參數
+        const waveStartX = 380;
+        const waveOriginY = canvas.height / 2;
+        const waveAmplitude = 100;
+        const waveWidth = canvas.width - waveStartX - 40;
+        const waveRangeRadians = 4 * Math.PI; // 顯示 4π 的範圍
+        
+        document.getElementById('pauseBtn').addEventListener('click', function() {
+            isPaused = !isPaused;
+            this.textContent = isPaused ? '繼續' : '暫停';
+        });
+        
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            angle = 0;
+            history = [];
+        });
+        
+        document.getElementById('speedControl').addEventListener('input', function() {
+            speed = parseFloat(this.value);
+            document.getElementById('speedValue').textContent = speed + 'x';
+        });
+        
+        function drawCircle() {
+            // 畫座標軸
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(circleCenterX, circleCenterY - circleRadius - 20);
+            ctx.lineTo(circleCenterX, circleCenterY + circleRadius + 20);
+            ctx.moveTo(circleCenterX - circleRadius - 20, circleCenterY);
+            ctx.lineTo(circleCenterX + circleRadius + 20, circleCenterY);
+            ctx.stroke();
+            
+            // 畫圓
+            ctx.beginPath();
+            ctx.arc(circleCenterX, circleCenterY, circleRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // 畫中心點
+            ctx.beginPath();
+            ctx.arc(circleCenterX, circleCenterY, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#333';
+            ctx.fill();
+            
+            // 計算點的位置（逆時鐘）
+            const x = circleCenterX + circleRadius * Math.cos(angle);
+            const y = circleCenterY - circleRadius * Math.sin(angle);
+            
+            // 畫半徑線
+            ctx.beginPath();
+            ctx.moveTo(circleCenterX, circleCenterY);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // 畫投影線到 Y 軸（正弦值）- 紅色
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(circleCenterX, y);
+            ctx.strokeStyle = '#ff6b6b';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+            
+            // 畫投影線到 X 軸（餘弦值）- 青色
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x, circleCenterY);
+            ctx.strokeStyle = '#4ecdc4';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // 畫旋轉的點
+            ctx.beginPath();
+            ctx.arc(x, y, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#667eea';
+            ctx.fill();
+            
+            // 顯示角度（弧度）
+            const radians = (angle % (2 * Math.PI)).toFixed(3);
+            ctx.font = 'bold 16px Arial';
+            ctx.fillStyle = '#333';
+            ctx.fillText('θ = ' + radians + ' rad', circleCenterX - 60, circleCenterY - circleRadius - 30);
+            
+            return { x, y, sin: Math.sin(angle), cos: Math.cos(angle) };
+        }
+        
+        function drawWaves(currentPoint) {
+            // 畫 Y 軸
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(waveStartX, 0);
+            ctx.lineTo(waveStartX, canvas.height);
+            ctx.stroke();
+            
+            // 畫中心線
+            ctx.beginPath();
+            ctx.moveTo(waveStartX, waveOriginY);
+            ctx.lineTo(canvas.width - 20, waveOriginY);
+            ctx.stroke();
+            
+            // 畫 Y 軸刻度
+            ctx.font = '12px Arial';
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'right';
+            ctx.fillText('1', waveStartX - 5, waveOriginY - waveAmplitude + 5);
+            ctx.fillText('0', waveStartX - 5, waveOriginY + 5);
+            ctx.fillText('-1', waveStartX - 5, waveOriginY + waveAmplitude + 5);
+            
+            // 畫 X 軸刻度（弧度）
+            ctx.textAlign = 'center';
+            const numTicks = 8;
+            for (let i = 0; i <= numTicks; i++) {
+                const x = waveStartX + (i / numTicks) * waveWidth;
+                const radValue = (i / numTicks) * waveRangeRadians;
+                
+                // 刻度線
+                ctx.beginPath();
+                ctx.moveTo(x, waveOriginY - 5);
+                ctx.lineTo(x, waveOriginY + 5);
+                ctx.stroke();
+                
+                // 刻度標籤
+                let label;
+                if (radValue === 0) label = '0';
+                else if (Math.abs(radValue - Math.PI) < 0.01) label = 'π';
+                else if (Math.abs(radValue - 2 * Math.PI) < 0.01) label = '2π';
+                else if (Math.abs(radValue - 3 * Math.PI) < 0.01) label = '3π';
+                else if (Math.abs(radValue - 4 * Math.PI) < 0.01) label = '4π';
+                else label = (radValue / Math.PI).toFixed(1) + 'π';
+                
+                ctx.fillText(label, x, waveOriginY + 20);
+            }
+            
+            // 計算當前角度在波形圖上的位置
+            const normalizedAngle = angle % waveRangeRadians;
+            const currentWaveX = waveStartX + (normalizedAngle / waveRangeRadians) * waveWidth;
+            
+            // 畫正弦波
+            ctx.beginPath();
+            ctx.strokeStyle = '#ff6b6b';
+            ctx.lineWidth = 3;
+            for (let x = waveStartX; x < canvas.width - 20; x += 2) {
+                const angleAtX = ((x - waveStartX) / waveWidth) * waveRangeRadians;
+                const y = waveOriginY - Math.sin(angleAtX) * waveAmplitude;
+                if (x === waveStartX) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+            
+            // 畫餘弦波
+            ctx.beginPath();
+            ctx.strokeStyle = '#4ecdc4';
+            ctx.lineWidth = 3;
+            for (let x = waveStartX; x < canvas.width - 20; x += 2) {
+                const angleAtX = ((x - waveStartX) / waveWidth) * waveRangeRadians;
+                const y = waveOriginY - Math.cos(angleAtX) * waveAmplitude;
+                if (x === waveStartX) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+            
+            // 畫當前位置的垂直線
+            ctx.beginPath();
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(currentWaveX, 20);
+            ctx.lineTo(currentWaveX, canvas.height - 20);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // 畫當前點
+            if (currentPoint) {
+                const sinY = waveOriginY - currentPoint.sin * waveAmplitude;
+                const cosY = waveOriginY - currentPoint.cos * waveAmplitude;
+                
+                // 正弦值點
+                ctx.beginPath();
+                ctx.arc(currentWaveX, sinY, 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#ff6b6b';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // 餘弦值點
+                ctx.beginPath();
+                ctx.arc(currentWaveX, cosY, 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#4ecdc4';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            
+            // 標籤
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#ff6b6b';
+            ctx.fillText('sin(θ) = ' + (currentPoint ? currentPoint.sin.toFixed(3) : '0.000'), waveStartX + 10, 30);
+            ctx.fillStyle = '#4ecdc4';
+            ctx.fillText('cos(θ) = ' + (currentPoint ? currentPoint.cos.toFixed(3) : '0.000'), waveStartX + 10, 55);
+        }
+        
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (!isPaused) {
+                angle += 0.015 * speed;
+            }
+            
+            const point = drawCircle();
+            drawWaves(point);
+            
+            requestAnimationFrame(animate);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>
