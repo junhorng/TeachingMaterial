@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>餘弦波形繪圖器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        h3 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 1em;
+        }
+        .formula {
+            text-align: center;
+            font-size: 20px;
+            color: #666;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+        label {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        input {
+            padding: 10px 15px;
+            font-size: 16px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            width: 120px;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #764ba2;
+        }
+        button {
+            padding: 10px 25px;
+            font-size: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+        .info {
+            text-align: center;
+            color: #666;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>餘弦波形繪圖器</h1>
+        <h3> 作者：亞東科技大學通訊工程系 陳俊宏</h3>
+        <div class="formula">y(t) = cos(2πf<sub>c</sub>t)</div>
+        
+        <div class="input-group">
+            <label for="fc">頻率 f<sub>c</sub> (Hz):</label>
+            <input type="number" id="fc" value="1" step="0.1" min="0.1">
+            <button onclick="plotCosine()">繪製波形</button>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="myChart"></canvas>
+        </div>
+        
+        <div class="info" id="info"></div>
+    </div>
+
+    <script>
+        let myChart = null;
+
+        function getTimeUnit(tMax) {
+            // 根據時間範圍選擇適當的單位
+            if (tMax >= 1) {
+                return { scale: 1, unit: 's', name: '秒' };
+            } else if (tMax >= 1e-3) {
+                return { scale: 1e3, unit: 'ms', name: '毫秒' };
+            } else if (tMax >= 1e-6) {
+                return { scale: 1e6, unit: 'μs', name: '微秒' };
+            } else if (tMax >= 1e-9) {
+                return { scale: 1e9, unit: 'ns', name: '奈秒' };
+            } else {
+                return { scale: 1, unit: 's', name: '秒', scientific: true };
+            }
+        }
+
+        function formatTime(value, timeUnit) {
+            if (timeUnit.scientific) {
+                return value.toExponential(2);
+            }
+            const scaled = value * timeUnit.scale;
+            if (scaled >= 100) {
+                return scaled.toFixed(0);
+            } else if (scaled >= 10) {
+                return scaled.toFixed(1);
+            } else {
+                return scaled.toFixed(2);
+            }
+        }
+
+        function plotCosine() {
+            const fc = parseFloat(document.getElementById('fc').value);
+            
+            if (isNaN(fc) || fc <= 0) {
+                alert('請輸入有效的正數頻率');
+                return;
+            }
+
+            // 計算週期
+            const T = 1 / fc;
+            const numPeriods = 7;
+            const tMax = numPeriods * T;
+            
+            // 決定時間單位
+            const timeUnit = getTimeUnit(tMax);
+            
+            // 生成數據點
+            const numPoints = 1000;
+            const dt = tMax / numPoints;
+            const t = [];
+            const y = [];
+            
+            for (let i = 0; i <= numPoints; i++) {
+                const time = i * dt;
+                t.push(time);
+                y.push(Math.cos(2 * Math.PI * fc * time));
+            }
+
+            // 格式化週期顯示
+            let periodStr;
+            if (T >= 1) {
+                periodStr = `${T.toFixed(4)} s`;
+            } else if (T >= 1e-3) {
+                periodStr = `${(T * 1e3).toFixed(4)} ms`;
+            } else if (T >= 1e-6) {
+                periodStr = `${(T * 1e6).toFixed(4)} μs`;
+            } else if (T >= 1e-9) {
+                periodStr = `${(T * 1e9).toFixed(4)} ns`;
+            } else {
+                periodStr = `${T.toExponential(3)} s`;
+            }
+
+            // 更新資訊
+            document.getElementById('info').innerHTML = 
+                `週期 T = ${periodStr} | 顯示 ${numPeriods} 個週期`;
+
+            // 繪製圖表
+            const ctx = document.getElementById('myChart').getContext('2d');
+            
+            if (myChart) {
+                myChart.destroy();
+            }
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: t,
+                    datasets: [{
+                        label: `cos(2π×${fc}×t)`,
+                        data: y,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            title: {
+                                display: true,
+                                text: `時間 t (${timeUnit.unit})`,
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            ticks: {
+                                maxTicksLimit: 15,
+                                callback: function(value) {
+                                    return formatTime(value, timeUnit);
+                                }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'y(t)',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            min: -1.2,
+                            max: 1.2
+                        }
+                    }
+                }
+            });
+        }
+
+        // 初始繪製
+        plotCosine();
+    </script>
+</body>
+</html>
