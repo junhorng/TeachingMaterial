@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>調幅信號模擬器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 1400px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        h3 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 1em;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f8f9fa;
+            padding: 10px 20px;
+            border-radius: 10px;
+        }
+        label {
+            font-weight: 600;
+            color: #333;
+        }
+        input[type="range"] {
+            width: 150px;
+        }
+        input[type="number"] {
+            width: 80px;
+            padding: 5px;
+            border: 2px solid #667eea;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .canvas-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        .canvas-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .canvas-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        canvas {
+            border: 3px solid #667eea;
+            border-radius: 15px;
+            cursor: crosshair;
+            background: white;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        .formula {
+            text-align: center;
+            margin-top: 15px;
+            font-style: italic;
+            color: #555;
+            font-size: 1.1em;
+        }
+        @media (max-width: 1024px) {
+            .canvas-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📡 調幅信號模擬器 (AM Modulation)</h1>
+        <h3> 作者：亞東科技大學通訊工程系 陳俊宏</h3>
+        <p class="subtitle">在左側畫布繪製訊息信號 m(t)，右側即時顯示調幅後的信號</p>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>載波頻率 f<sub>c</sub>:</label>
+                <input type="range" id="fcSlider" min="1" max="100" value="10" step="1">
+                <input type="number" id="fcValue" min="1" max="100" value="10" step="1">
+                <select id="fcUnit">
+                    <option value="1">Hz</option>
+                    <option value="1000">kHz</option>
+                    <option value="1000000" selected>MHz</option>
+                </select>
+            </div>
+            <button id="clearBtn">清除畫布</button>
+        </div>
+
+        <div class="canvas-container">
+            <div class="canvas-wrapper">
+                <div class="canvas-title">訊息信號 m(t)</div>
+                <canvas id="inputCanvas" width="600" height="400"></canvas>
+                <div class="formula">手繪您的訊息信號</div>
+            </div>
+            <div class="canvas-wrapper">
+                <div class="canvas-title">調幅信號 m(t)·cos(2πf<sub>c</sub>t)</div>
+                <canvas id="outputCanvas" width="600" height="400"></canvas>
+                <div class="formula">載波: cos(2πf<sub>c</sub>t)</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const inputCanvas = document.getElementById('inputCanvas');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const inputCtx = inputCanvas.getContext('2d');
+        const outputCtx = outputCanvas.getContext('2d');
+        const fcSlider = document.getElementById('fcSlider');
+        const fcValue = document.getElementById('fcValue');
+        const clearBtn = document.getElementById('clearBtn');
+
+        let isDrawing = false;
+        let signalData = new Array(inputCanvas.width).fill(0);
+        let fc = 5; // 載波頻率
+
+        function initCanvas(ctx, canvas) {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 繪製中線
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height / 2);
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        function drawGrid(ctx, canvas) {
+            ctx.strokeStyle = '#f0f0f0';
+            ctx.lineWidth = 1;
+            
+            // 垂直線
+            for (let x = 0; x < canvas.width; x += 50) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            // 水平線
+            for (let y = 0; y < canvas.height; y += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        function clearCanvas() {
+            signalData.fill(0);
+            initCanvas(inputCtx, inputCanvas);
+            drawGrid(inputCtx, inputCanvas);
+            updateOutput();
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            draw(e);
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+
+            const rect = inputCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (x >= 0 && x < inputCanvas.width && y >= 0 && y < inputCanvas.height) {
+                // 將 y 座標轉換為信號值 (-1 到 1)
+                signalData[Math.floor(x)] = (inputCanvas.height / 2 - y) / (inputCanvas.height / 2);
+                
+                // 繪製點
+                inputCtx.fillStyle = '#667eea';
+                inputCtx.beginPath();
+                inputCtx.arc(x, y, 3, 0, Math.PI * 2);
+                inputCtx.fill();
+
+                updateOutput();
+            }
+        }
+
+        function updateOutput() {
+            initCanvas(outputCtx, outputCanvas);
+            drawGrid(outputCtx, outputCanvas);
+            
+            outputCtx.strokeStyle = '#764ba2';
+            outputCtx.lineWidth = 2;
+            outputCtx.beginPath();
+
+            const centerY = outputCanvas.height / 2;
+            
+            for (let x = 0; x < outputCanvas.width; x++) {
+                const t = x / outputCanvas.width * 2; // 時間範圍 0 到 2 秒
+                const carrier = Math.cos(2 * Math.PI * fc * t);
+                const modulated = signalData[x] * carrier;
+                const y = centerY - modulated * (outputCanvas.height / 2);
+                
+                if (x === 0) {
+                    outputCtx.moveTo(x, y);
+                } else {
+                    outputCtx.lineTo(x, y);
+                }
+            }
+            
+            outputCtx.stroke();
+
+            // 繪製包絡線
+            outputCtx.strokeStyle = 'rgba(102, 126, 234, 0.5)';
+            outputCtx.lineWidth = 1.5;
+            outputCtx.setLineDash([5, 5]);
+            
+            // 上包絡
+            outputCtx.beginPath();
+            for (let x = 0; x < outputCanvas.width; x++) {
+                const y = centerY - signalData[x] * (outputCanvas.height / 2);
+                if (x === 0) outputCtx.moveTo(x, y);
+                else outputCtx.lineTo(x, y);
+            }
+            outputCtx.stroke();
+            
+            // 下包絡
+            outputCtx.beginPath();
+            for (let x = 0; x < outputCanvas.width; x++) {
+                const y = centerY + signalData[x] * (outputCanvas.height / 2);
+                if (x === 0) outputCtx.moveTo(x, y);
+                else outputCtx.lineTo(x, y);
+            }
+            outputCtx.stroke();
+            outputCtx.setLineDash([]);
+        }
+
+        // 事件監聽
+        inputCanvas.addEventListener('mousedown', startDrawing);
+        inputCanvas.addEventListener('mousemove', draw);
+        inputCanvas.addEventListener('mouseup', stopDrawing);
+        inputCanvas.addEventListener('mouseleave', stopDrawing);
+
+        // 觸控支援
+        inputCanvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            inputCanvas.dispatchEvent(mouseEvent);
+        });
+
+        inputCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            inputCanvas.dispatchEvent(mouseEvent);
+        });
+
+        inputCanvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            const mouseEvent = new MouseEvent('mouseup', {});
+            inputCanvas.dispatchEvent(mouseEvent);
+        });
+
+        fcSlider.addEventListener('input', (e) => {
+            fc = parseFloat(e.target.value);
+            fcValue.value = fc;
+            updateOutput();
+        });
+
+        fcValue.addEventListener('input', (e) => {
+            fc = parseFloat(e.target.value);
+            fcSlider.value = fc;
+            updateOutput();
+        });
+
+        clearBtn.addEventListener('click', clearCanvas);
+
+        // 初始化
+        clearCanvas();
+    </script>
+</body>
+</html>
