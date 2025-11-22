@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互動式 FM 調變模擬器 (最終修正版)</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- MathJax 設定 -->
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['$','$'], ['\\(','\\)']] }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        body { background:#1a1a2e; color:#e5e7eb; font-family:Inter, sans-serif; }
+        .canvas-container { border:2px solid #6366f1; background:#0f172a; border-radius:.5rem; margin-bottom:1rem; position:relative; }
+        .canvas-label { position:absolute; top:.5rem; left:.5rem; font-size:1.1rem; font-weight:bold; color:#a855f7; background:rgba(15,23,42,.7); padding:.25rem .5rem; border-radius:.25rem; }
+        canvas { width:100%; display:block; cursor:crosshair; }
+        h3 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 1em;
+        }
+    </style>
+</head>
+<body>
+
+<div class="min-h-screen p-6 flex flex-col items-center">
+    <h1 class="text-4xl font-extrabold text-[#95c5d3] mb-2">FM 調變互動模擬器</h1>
+    <h1 class="text-2xl font-extrabold text-[#95c5d3] mb-2"> 作者：亞東科技大學通訊工程系 陳俊宏</h1>
+    <p class="text-gray-300 text-lg mb-6">畫出你的訊號 $m(t)$，觀察 FM 訊號 $s(t)$（振幅固定，頻率變化）。</p>
+
+    <div class="w-full max-w-6xl space-y-8">
+
+        <!-- 三個波形 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            <!-- 手繪訊號 -->
+            <div class="canvas-container">
+                <span class="canvas-label">訊息訊號 $m(t)$</span>
+                <canvas id="messageCanvas" height="250"></canvas>
+                <div class="absolute bottom-2 w-full text-center space-x-4">
+                    <button id="clearDrawing" class="px-3 py-1 bg-red-600 rounded">清除</button>
+                    <button id="resetMessage" class="px-3 py-1 bg-blue-600 rounded">重置正弦波</button>
+                </div>
+            </div>
+
+            <!-- 載波 -->
+            <div class="canvas-container">
+                <span class="canvas-label">載波 $c(t)$</span>
+                <canvas id="carrierCanvas" height="250"></canvas>
+            </div>
+
+            <!-- FM 訊號 -->
+            <div class="canvas-container">
+                <span class="canvas-label">FM 訊號（振幅固定）</span>
+                <canvas id="fmCanvas" height="250"></canvas>
+            </div>
+        </div>
+
+        <!-- 參數控制 -->
+        <div class="bg-gray-800 p-4 rounded-xl">
+            <h2 class="text-2xl font-bold text-indigo-300 mb-4">參數設定</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                <div>
+                    <label class="text-purple-300">訊號頻率 $f_m$</label>
+                    <input id="fm_freq" type="range" min="1" max="10" step="0.5" value="2" class="w-full">
+                    <p id="fm_freq_value" class="text-center">2 Hz</p>
+                </div>
+
+                <div>
+                    <label class="text-purple-300">訊號振幅 $A_m$</label>
+                    <input id="fm_amplitude" type="range" min="10" max="100" step="5" value="50" class="w-full">
+                    <p id="fm_amplitude_value" class="text-center">50</p>
+                </div>
+
+                <div>
+                    <label class="text-purple-300">載波頻率 $f_c$</label>
+                    <input id="carrier_freq" type="range" min="30" max="100" step="5" value="50" class="w-full">
+                    <p id="carrier_freq_value" class="text-center">50 Hz</p>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// ========== Canvas ==========
+const messageCanvas = document.getElementById("messageCanvas");
+const carrierCanvas = document.getElementById("carrierCanvas");
+const fmCanvas = document.getElementById("fmCanvas");
+
+const msgCtx = messageCanvas.getContext("2d");
+const carCtx = carrierCanvas.getContext("2d");
+const fmCtx = fmCanvas.getContext("2d");
+
+// ========== Controls ==========
+let fm = 2;
+let Am = 50;
+let fc = 50;
+const Ac = 1.0;    // FM 振幅固定
+const Kf = 50;     // ★★★ 調頻靈敏度（值越大，頻率變化越明顯）
+
+// ========== Sampling ==========
+const sampleRate = 500;
+const duration = 1.0;
+const N = sampleRate * duration;
+let canvasWidth, canvasHeight;
+
+// ========== Drawing Buffer ==========
+let isDrawing = false;
+let lastDrawIndex = null;
+let drawMode = "sine";
+let messageData = new Array(N).fill(0);
+const MAX_MSG_AMP = 100;
+
+// Resize
+function resize() {
+    const w = messageCanvas.parentElement.clientWidth - 4;
+    canvasWidth = w;
+    canvasHeight = messageCanvas.height;
+    [messageCanvas, carrierCanvas, fmCanvas].forEach(c => { c.width = w; c.height = canvasHeight; });
+}
+
+// Draw any signal
+function drawSignal(ctx, data, color) {
+    ctx.clearRect(0,0,canvasWidth,canvasHeight);
+    const mid = canvasHeight/2;
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.moveTo(0, mid - data[0]*80);
+    for (let i=1;i<data.length;i++) {
+        const x = i / data.length * canvasWidth;
+        const y = mid - data[i]*80;
+        ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+}
+
+// Generate & Draw all signals
+function updateAll() {
+    let msg = new Array(N);
+    let Amax = 1;
+
+    if (drawMode === "sine") {
+        for (let i=0;i<N;i++) msg[i] = (Am/MAX_MSG_AMP)*Math.sin(2*Math.PI*fm*(i/sampleRate));
+        Amax = Am/MAX_MSG_AMP;
+    } else {
+        for (let i=0;i<N;i++) msg[i] = messageData[i]/MAX_MSG_AMP;
+        Amax = Math.max(...msg.map(Math.abs)) || 1;
+    }
+
+    drawSignal(msgCtx, msg, "#f59e0b");
+
+    let carrier = new Array(N);
+    for (let i=0;i<N;i++) carrier[i] = Math.cos(2*Math.PI*fc*(i/sampleRate));
+    drawSignal(carCtx, carrier, "#60a5fa");
+
+    // ===== 正確 FM：振幅固定，頻率依訊號變化 =====
+    let fmSig = new Array(N);
+    let phase = 0;
+    let dt = 1/sampleRate;
+
+    for (let i=0;i<N;i++) {
+        const fi = fc + Kf * msg[i];  // ★ 正確 FM：頻率 = fc + Kf*m(t)
+        phase += 2*Math.PI*fi*dt;
+        fmSig[i] = Math.cos(phase);   // ★ 振幅固定
+    }
+
+    drawSignal(fmCtx, fmSig, "#c084fc");
+}
+
+// ========== Drawing (Freehand) ==========
+function getPos(e){
+    const r = messageCanvas.getBoundingClientRect();
+    return { x:e.clientX-r.left, y:e.clientY-r.top };
+}
+
+messageCanvas.addEventListener("mousedown", e=>{
+    isDrawing = true;
+    drawMode = "freehand";
+    const p = getPos(e);
+    const idx = Math.floor((p.x/canvasWidth)*N);
+    const val = ((canvasHeight/2)-p.y)/(canvasHeight/2)*MAX_MSG_AMP;
+    messageData[idx] = val;
+    lastDrawIndex = idx;
+    updateAll();
+});
+
+messageCanvas.addEventListener("mousemove", e=>{
+    if (!isDrawing) return;
+    const p = getPos(e);
+    const idx = Math.floor((p.x/canvasWidth)*N);
+    const val = ((canvasHeight/2)-p.y)/(canvasHeight/2)*MAX_MSG_AMP;
+
+    if (lastDrawIndex!=null) {
+        const s = lastDrawIndex, eidx = idx;
+        const steps = Math.max(1,Math.abs(eidx-s));
+        for(let i=0;i<=steps;i++){
+            const ii = s + i*Math.sign(eidx-s);
+            const ratio = i/steps;
+            messageData[ii] = messageData[s]*(1-ratio)+val*ratio;
+        }
+    }
+    lastDrawIndex = idx;
+    updateAll();
+});
+
+window.addEventListener("mouseup",()=>{ isDrawing=false; lastDrawIndex=null; });
+
+// Buttons
+clearDrawing.onclick = ()=>{ messageData.fill(0); drawMode="freehand"; updateAll(); };
+resetMessage.onclick = ()=>{ drawMode="sine"; updateAll(); };
+
+// Sliders
+fm_freq.oninput = ()=>{ fm=parseFloat(fm_freq.value); fm_freq_value.textContent=fm+" Hz"; updateAll(); };
+fm_amplitude.oninput = ()=>{ Am=parseFloat(fm_amplitude.value); fm_amplitude_value.textContent=Am; updateAll(); };
+carrier_freq.oninput = ()=>{ fc=parseFloat(carrier_freq.value); carrier_freq_value.textContent=fc+" Hz"; updateAll(); };
+
+window.onload = ()=>{ resize(); updateAll(); };
+window.onresize = ()=>{ resize(); updateAll(); };
+</script>
+
+</body>
+</html>
