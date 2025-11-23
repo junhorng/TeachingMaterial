@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BPSK 教學互動模擬器</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- MathJax (已包含您建議的行內公式設定) -->
+    <script>
+        window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        body { background:#0f172a; color:#e5e7eb; font-family:Inter, sans-serif; }
+        .container { max-width:1100px; margin:24px auto; padding:16px; }
+        .card { background:#111827; border:1px solid rgba(99,102,241,0.12); border-radius:12px; padding:12px; }
+        canvas { width:100%; height:auto; display:block; border-radius:8px; }
+        /* 更改位元顯示樣式，因為現在是極性NRZ */
+        .bit-pill { font-family:monospace; padding:.25rem .5rem; border-radius:.25rem; font-weight: bold; }
+        .bit-1 { background:#16a34a; color:white; } /* +1 */
+        .bit-0 { background:#dc2626; color:white; } /* -1 (來自原始 0) */
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:#8b5cf6; }
+        .btn { padding:.4rem .75rem; border-radius:.375rem; cursor:pointer; border:none; transition: background-color 0.2s; }
+        .btn-refresh { background:#06b6d4; color:white; }
+        .btn-refresh:hover { background:#0891b2; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="mb-4 text-center">
+        <h1 class="text-3xl font-bold text-sky-300">BPSK 教學互動模擬器（BPSK）</h1>
+        <h1 class="text-2xl font-extrabold text-[#78c9ff] mb-1">作者：亞東科技大學通訊工程系 陳俊宏</h1>
+        <p class="text-sm text-gray-400">BPSK：將數位資料轉換為極性 NRZ ($+1, -1$)，再乘上載波進行調變。
+            <br>載波頻率 $f_c$ 固定為 $2 \times$ 位元速率 $R_b$。
+        </p>
+    </header>
+
+    <div class="card mb-4">
+        <h2 class="text-lg text-pink-300 mb-2">資料控制</h2>
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <button id="refreshBits" class="btn btn-refresh">🔄 重新產生 10 個位元</button>
+                <div>
+                    <div class="text-sm text-gray-300">原始數位序列 (10 bits)</div>
+                    <div id="bitSequenceDisplay" class="mt-2 flex gap-2 flex-wrap"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+        <div class="card">
+            <h3 class="text-yellow-300 mb-2">極性 NRZ 資料 $b'(t)$</h3>
+            <canvas id="dataCanvas" height="140"></canvas>
+        </div>
+        <div class="card">
+            <h3 class="text-yellow-300 mb-2">載波 $c(t)$</h3>
+            <canvas id="carrierCanvas" height="140"></canvas>
+        </div>
+        <div class="card">
+            <h3 class="text-yellow-300 mb-2">BPSK 訊號 $s(t)$</h3>
+            <canvas id="bpskCanvas" height="140"></canvas>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <h2 class="text-lg text-indigo-300 mb-2">參數控制</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm text-purple-300 mb-1">載波振幅 $A$ (V)</label>
+                <input id="carrier_amplitude" type="range" min="0.2" max="2.0" step="0.1" value="1.0" class="w-full">
+                <div id="carrier_amplitude_value" class="mt-1 text-center font-bold">1.0 V</div>
+            </div>
+            <div>
+                <label class="block text-sm text-purple-300 mb-1">位元速率 $R_b$ (Bits/s)</label>
+                <input id="bit_rate" type="range" min="1" max="8" step="0.5" value="2" class="w-full">
+                <div id="bit_rate_value" class="mt-1 text-center font-bold">2.0 Bits/s</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="infoDisplay" class="card text-sm font-mono p-3"></div>
+</div>
+
+<script>
+(function(){
+    // 固定參數
+    const FIXED_CYCLES_PER_BIT = 2; // f_c = 2 * R_b
+    const FIXED_SAMPLE_RATE = 1000; // 每秒取樣點數
+
+    // elements
+    const dataCanvas = document.getElementById('dataCanvas');
+    const carrierCanvas = document.getElementById('carrierCanvas');
+    const bpskCanvas = document.getElementById('bpskCanvas'); // 更改 ID
+    const dataCtx = dataCanvas.getContext('2d');
+    const carCtx = carrierCanvas.getContext('2d');
+    const bpskCtx = bpskCanvas.getContext('2d'); // 更改 Context
+
+    const refreshBtn = document.getElementById('refreshBits');
+    const bitDisplay = document.getElementById('bitSequenceDisplay');
+    const carrierAmpInput = document.getElementById('carrier_amplitude');
+    const bitRateInput = document.getElementById('bit_rate');
+    const infoDisplay = document.getElementById('infoDisplay');
+
+    // params
+    let numBits = 10;
+    let bits = randomBits(numBits); // 0 or 1
+    let Rb = parseFloat(bitRateInput.value);
+    let A = parseFloat(carrierAmpInput.value);
+    let fc = FIXED_CYCLES_PER_BIT * Rb;
+
+    function randomBits(n){ const a=[]; for(let i=0;i<n;i++) a.push(Math.round(Math.random())); return a; }
+
+    function showBits(){ 
+        bitDisplay.innerHTML=''; 
+        bits.forEach(b=>{ 
+            const d=document.createElement('div'); 
+            // 顯示原始位元值，但用顏色區分 BPSK 的相位
+            d.className='bit-pill '+(b? 'bit-1':'bit-0'); 
+            d.textContent=b; 
+            bitDisplay.appendChild(d); 
+        }); 
+    }
+
+    function resize(){ 
+        const w = dataCanvas.parentElement.clientWidth; 
+        [dataCanvas,carrierCanvas,bpskCanvas].forEach(c=>{ 
+            c.width=w; 
+            c.height=140; 
+        }); 
+        renderAll(); 
+    }
+
+    /**
+     * @description 繪製單一波形
+     * @param {CanvasRenderingContext2D} ctx - Canvas Context
+     * @param {Array<number>} data - 訊號數據
+     * @param {string} color - 線條顏色
+     * @param {number} yRange - 垂直範圍 (例如：1.2 for +/-1.2, A for +/-A)
+     */
+    function drawSignal(ctx, data, color, yRange){ 
+        if(!data) return; 
+        ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height); 
+        
+        const mid=ctx.canvas.height/2; // center
+        
+        // Draw center line
+        ctx.beginPath(); 
+        ctx.strokeStyle='#374151'; 
+        ctx.lineWidth=1; 
+        ctx.moveTo(0,mid); 
+        ctx.lineTo(ctx.canvas.width,mid); 
+        ctx.stroke(); 
+
+        // Draw signal
+        ctx.beginPath(); 
+        ctx.strokeStyle=color; 
+        ctx.lineWidth=2; 
+        const scaleY=(mid*0.8)/yRange; 
+        ctx.moveTo(0, mid - data[0]*scaleY); 
+        
+        for(let i=1;i<data.length;i++){ 
+            const x=(i/data.length)*ctx.canvas.width; 
+            const y=mid - data[i]*scaleY; 
+            ctx.lineTo(x,y);
+        } 
+        ctx.stroke(); 
+        
+        // Draw bit separators
+        drawBitSeparators([ctx], numBits, data.length, 1.0/Rb, numBits/Rb);
+    }
+
+    function renderAll(){
+        // recalc
+        Rb = parseFloat(bitRateInput.value);
+        A = parseFloat(carrierAmpInput.value);
+        // BPSK 核心頻率邏輯: fc = 5 * Rb
+        fc = FIXED_CYCLES_PER_BIT * Rb; 
+
+        const Tb = 1.0/Rb;
+        const timeDuration = numBits / Rb;
+        const N = Math.round(FIXED_SAMPLE_RATE * timeDuration);
+
+        // --- 1. 極性 NRZ 資料 b'(t) (-1 or +1) ---
+        const bPrime = new Array(N);
+        for(let i=0;i<N;i++){ 
+            const t=i/FIXED_SAMPLE_RATE; 
+            const idx=Math.floor(t/Tb); 
+            const bit = bits[idx]||0; 
+            // 轉換： 0 -> -1, 1 -> +1
+            bPrime[i] = (bit === 1) ? 1.0 : -1.0; 
+        }
+        // 繪製極性 NRZ 資料，使用範圍 1.2 容納 +/- 1
+        drawSignal(dataCtx, bPrime, '#f59e0b', 1.2);
+
+        // --- 2. 載波訊號 c(t) ---
+        const carrier = new Array(N);
+        for(let i=0;i<N;i++){ 
+            const t=i/FIXED_SAMPLE_RATE; 
+            // c(t) = A * cos(2 * pi * fc * t)
+            carrier[i]=A*Math.cos(2*Math.PI*fc*t); 
+        }
+        // 繪製載波
+        drawSignal(carCtx, carrier, '#60a5fa', A);
+
+        // --- 3. BPSK 訊號 s(t) ---
+        const bpsk = new Array(N);
+        for(let i=0;i<N;i++){
+            // s(t) = b'(t) * c(t)
+            bpsk[i] = bPrime[i] * carrier[i];
+        }
+        // 繪製 BPSK 訊號
+        drawSignal(bpskCtx, bpsk, '#c084fc', A);
+
+        // update info panel
+        infoDisplay.innerHTML = `
+            <div style="padding:8px;border:1px solid #374151;border-radius:6px;margin-bottom:6px;">BPSK 調變公式: $s(t) = b'(t) \\cdot A \\cos(2\\pi f_c t)$</div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap"> 
+                <div style="padding:8px;border:1px solid #374151;border-radius:6px">載波振幅 $A$ = <strong>${A.toFixed(1)}</strong> V</div>
+                <div style="padding:8px;border:1px solid #374151;border-radius:6px">位元速率 $R_b$ = <strong>${Rb.toFixed(1)}</strong> bits/s</div>
+                <div style="padding:8px;border:1px solid #374151;border-radius:6px">載波頻率 $f_c$ = <strong>${fc.toFixed(1)}</strong> Hz ($2 R_b$)</div>
+                <div style="padding:8px;border:1px solid #374151;border-radius:6px">週期/位元 $f_c/R_b$ = <strong>${FIXED_CYCLES_PER_BIT}</strong></div>
+            </div>
+        `;
+        if(typeof MathJax!=='undefined' && MathJax.typesetPromise) MathJax.typesetPromise([infoDisplay]).catch(()=>{});
+
+        // Update slider values
+        document.getElementById('carrier_amplitude_value').textContent = A.toFixed(1) + " V";
+        document.getElementById('bit_rate_value').textContent = Rb.toFixed(1) + " Bits/s";
+    }
+
+    /**
+     * @description 繪製位元週期分隔線
+     * @param {Array<CanvasRenderingContext2D>} ctxs - 所有需要畫分隔線的 Context
+     * @param {number} numBits - 總位元數
+     * @param {number} N - 總取樣點數
+     * @param {number} Tb - 位元持續時間
+     * @param {number} timeDuration - 總時間
+     */
+    function drawBitSeparators(ctxs, numBits, N, Tb, timeDuration){
+        const samplesPerBit = N/numBits;
+        ctxs.forEach(ctx=>{
+            ctx.save(); 
+            ctx.strokeStyle='rgba(255,255,255,0.06)'; 
+            ctx.lineWidth=1;
+            for(let i=1;i<numBits;i++){
+                const x = (i * samplesPerBit / N) * ctx.canvas.width;
+                ctx.beginPath(); 
+                ctx.moveTo(x,0); 
+                ctx.lineTo(x,ctx.canvas.height); 
+                ctx.stroke();
+            }
+            ctx.restore();
+        });
+    }
+
+    // events
+    bitRateInput.addEventListener('input', renderAll);
+    carrierAmpInput.addEventListener('input', renderAll);
+
+    refreshBtn.addEventListener('click', ()=>{ 
+        bits = randomBits(numBits); 
+        showBits(); 
+        renderAll(); 
+    });
+
+    window.addEventListener('resize', resize);
+    window.onload = ()=>{ showBits(); resize(); };
+
+})();
+</script>
+
+</body>
+</html>
