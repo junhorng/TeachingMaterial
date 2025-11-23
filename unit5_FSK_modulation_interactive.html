@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FSK 教學互動模擬器 (BFSK)</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- MathJax -->
+    <script>
+        window.MathJax = { tex: { inlineMath: [['$','$'], ['\(','\)']] } };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        body { background:#0f172a; color:#e5e7eb; font-family:Inter, sans-serif; }
+        .container { max-width:1100px; margin:24px auto; padding:16px; }
+        .card { background:#111827; border:1px solid rgba(99,102,241,0.12); border-radius:12px; padding:12px; }
+        canvas { width:100%; height:auto; display:block; border-radius:8px; }
+        .bit-pill { font-family:monospace; padding:.25rem .5rem; border-radius:.25rem; }
+        .bit-1 { background:#16a34a; color:white; }
+        .bit-0 { background:#374151; color:#d1d5db; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:#8b5cf6; }
+        .btn { padding:.4rem .75rem; border-radius:.375rem; cursor:pointer; border:none; }
+        .btn-refresh { background:#06b6d4; color:white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="mb-4 text-center">
+        <h1 class="text-3xl font-bold text-sky-300">FSK 教學互動模擬器（BFSK）</h1>
+        <h1 class="text-2xl font-extrabold text-[#78c9ff] mb-1">作者：亞東科技大學通訊工程系 陳俊宏</h1>
+        <p class="text-sm text-gray-400">二進位 FSK：bit=1 對應 f<sub>1</sub>，bit=0 對應 f<sub>0</sub>
+    </header>
+
+    <div class="card mb-4">
+        <h2 class="text-lg text-pink-300 mb-2">資料控制</h2>
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <button id="refreshBits" class="btn btn-refresh">🔄 重新產生 10 個位元</button>
+                <div>
+                    <div class="text-sm text-gray-300">當前數位序列 (10 bits)</div>
+                    <div id="bitSequenceDisplay" class="mt-2 flex gap-2 flex-wrap"></div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <label class="text-sm text-gray-300">每位元載波週期 (cycles/bit)</label>
+                <input id="cycles_per_bit" type="range" min="2" max="20" step="1" value="5">
+                <div id="cycles_value" class="text-white font-bold">5</div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <label class="text-sm text-gray-300">頻率偏移 Δcycles/bit</label>
+                <input id="delta_cycles" type="range" min="1" max="10" step="1" value="2">
+                <div id="delta_value" class="text-white font-bold">2</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+        <div class="card">
+            <h3 class="text-yellow-300 mb-2">數位資料 $b(t)$</h3>
+            <canvas id="dataCanvas" height="140"></canvas>
+        </div>
+        <div class="card">
+            <h3 class="text-yellow-300 mb-2">載波比較 (f0 / f1)</h3>
+            <canvas id="carrierCanvas" height="140"></canvas>
+        </div>
+        <div class="card">
+            <h3 class="text-yellow-300 mb-2">FSK 訊號 $s(t)$</h3>
+            <canvas id="fskCanvas" height="140"></canvas>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <h2 class="text-lg text-indigo-300 mb-2">參數控制</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm text-purple-300 mb-1">載波振幅 A</label>
+                <input id="carrier_amplitude" type="range" min="0.2" max="2.0" step="0.1" value="1.0" class="w-full">
+                <div id="carrier_amplitude_value" class="mt-1 text-center">1.0 V</div>
+            </div>
+            <div>
+                <label class="block text-sm text-purple-300 mb-1">位元速率 R<sub>b</sub> (Bits/s)</label>
+                <input id="bit_rate" type="range" min="1" max="8" step="0.5" value="2" class="w-full">
+                <div id="bit_rate_value" class="mt-1 text-center">2.0 Bits/s</div>
+            </div>
+            <div>
+                <label class="block text-sm text-purple-300 mb-1">顯示取樣率 (sample/s)</label>
+                <input id="sample_rate" type="range" min="200" max="2000" step="100" value="1000" class="w-full">
+                <div id="sample_rate_value" class="mt-1 text-center">1000</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="infoDisplay" class="card text-sm font-mono p-3"></div>
+</div>
+
+<script>
+(function(){
+    // elements
+    const dataCanvas = document.getElementById('dataCanvas');
+    const carrierCanvas = document.getElementById('carrierCanvas');
+    const fskCanvas = document.getElementById('fskCanvas');
+    const dataCtx = dataCanvas.getContext('2d');
+    const carCtx = carrierCanvas.getContext('2d');
+    const fskCtx = fskCanvas.getContext('2d');
+
+    const refreshBtn = document.getElementById('refreshBits');
+    const bitDisplay = document.getElementById('bitSequenceDisplay');
+    const cyclesSlider = document.getElementById('cycles_per_bit');
+    const cyclesValue = document.getElementById('cycles_value');
+    const deltaSlider = document.getElementById('delta_cycles');
+    const deltaValue = document.getElementById('delta_value');
+    const carrierAmpInput = document.getElementById('carrier_amplitude');
+    const bitRateInput = document.getElementById('bit_rate');
+    const sampleRateInput = document.getElementById('sample_rate');
+    const infoDisplay = document.getElementById('infoDisplay');
+
+    // params
+    let numBits = 10;
+    let bits = randomBits(numBits);
+    let cyclesPerBit = parseInt(cyclesSlider.value,10);
+    let deltaCycles = parseInt(deltaSlider.value,10);
+    let Rb = parseFloat(bitRateInput.value);
+    let A = parseFloat(carrierAmpInput.value);
+    let sampleRate = parseInt(sampleRateInput.value,10);
+
+    function randomBits(n){ const a=[]; for(let i=0;i<n;i++) a.push(Math.round(Math.random())); return a; }
+
+    function showBits(){ bitDisplay.innerHTML=''; bits.forEach(b=>{ const d=document.createElement('div'); d.className='bit-pill '+(b? 'bit-1':'bit-0'); d.textContent=b; bitDisplay.appendChild(d); }); }
+
+    function resize(){ const w = dataCanvas.parentElement.clientWidth; [dataCanvas,carrierCanvas,fskCanvas].forEach(c=>{ c.width=w; c.height=140; }); renderAll(); }
+
+    function drawSignal(ctx, data, color, yRange){ if(!data) return; ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height); const mid=ctx.canvas.height/2; // center
+        ctx.beginPath(); ctx.strokeStyle='#374151'; ctx.lineWidth=1; ctx.moveTo(0,mid); ctx.lineTo(ctx.canvas.width,mid); ctx.stroke(); ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2; const scaleY=(mid*0.8)/yRange; ctx.moveTo(0, mid - data[0]*scaleY); for(let i=1;i<data.length;i++){ const x=(i/data.length)*ctx.canvas.width; const y=mid - data[i]*scaleY; ctx.lineTo(x,y);} ctx.stroke(); }
+
+    function renderAll(){
+        // recalc
+        Rb = parseFloat(bitRateInput.value);
+        cyclesPerBit = parseInt(cyclesSlider.value,10);
+        deltaCycles = parseInt(deltaSlider.value,10);
+        A = parseFloat(carrierAmpInput.value);
+        sampleRate = parseInt(sampleRateInput.value,10);
+
+        const Tb = 1.0/Rb;
+        const timeDuration = numBits / Rb;
+        const N = Math.round(sampleRate * timeDuration);
+
+        // create b(t)
+        const b = new Array(N);
+        for(let i=0;i<N;i++){ const t=i/sampleRate; const idx=Math.floor(t/Tb); b[i]=bits[idx]||0; }
+        drawSignal(dataCtx, b, '#f59e0b', 1.2);
+
+        // compute frequencies
+        // base freq cyclesPerBit * Rb acts as center for f0; choose f0 = center - delta/2, f1 = center + delta/2
+        const centerCycles = cyclesPerBit;
+        const f_center = centerCycles * Rb;
+        const delta_f = deltaCycles * Rb; // frequency separation in Hz
+        const f0 = Math.max(0.1, f_center - delta_f/2);
+        const f1 = f_center + delta_f/2;
+
+        // carrier comparison (show both cosines over same time window)
+        const carrier0 = new Array(N); const carrier1 = new Array(N);
+        for(let i=0;i<N;i++){ const t=i/sampleRate; carrier0[i]=A*Math.cos(2*Math.PI*f0*t); carrier1[i]=A*Math.cos(2*Math.PI*f1*t); }
+        // draw carrier0 in blue, carrier1 in green
+        drawSignal(carCtx, carrier0, '#60a5fa', A);
+        // draw carrier1 in green
+        carCtx.beginPath(); carCtx.strokeStyle='#4ade80'; carCtx.lineWidth=2; const mid=carCtx.canvas.height/2; const scaleY=(mid*0.8)/A; carCtx.moveTo(0, mid - carrier1[0]*scaleY); for(let i=1;i<carrier1.length;i++){ const x=(i/carrier1.length)*carCtx.canvas.width; const y=mid - carrier1[i]*scaleY; carCtx.lineTo(x,y);} carCtx.stroke();
+
+        // FSK signal
+        const fsk = new Array(N);
+        let phase = 0; // continuous phase BFSK or abrupt? we'll implement abrupt-phase (simple BFSK)
+        for(let i=0;i<N;i++){
+            const t=i/sampleRate;
+            const idx=Math.floor(t/Tb);
+            const bit = bits[idx]||0;
+            const fi = bit? f1 : f0;
+            // integrate phase
+            phase += 2*Math.PI*fi*(1/sampleRate);
+            fsk[i] = A * Math.cos(phase);
+        }
+        drawSignal(fskCtx, fsk, '#c084fc', A);
+
+        // draw separators on all canvases (bit boundaries)
+        drawBitSeparators([dataCtx,carCtx,fskCtx], numBits, N, Tb, timeDuration);
+
+        // update info panel
+        infoDisplay.innerHTML = `
+            <div style="padding:8px;border:1px solid #374151;border-radius:6px;margin-bottom:6px;">FSK 公式: $s(t)=A\\cos(2 \\pi f_i t)$，其中 $f_i = f_1$ (bit=1), $f_i=f_0$ (bit=0)</div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap"> 
+                <div style=\"padding:8px;border:1px solid #374151;border-radius:6px\">$R_b$ = <strong>${Rb.toFixed(2)}</strong> bits/s</div>
+                <div style=\"padding:8px;border:1px solid #374151;border-radius:6px\">cycles/bit = <strong>${cyclesPerBit}</strong></div>
+                <div style=\"padding:8px;border:1px solid #374151;border-radius:6px\">$\Delta$ cycles/bit = <strong>${deltaCycles}</strong></div>
+                <div style=\"padding:8px;border:1px solid #374151;border-radius:6px\">$f_0$ = <strong>${f0.toFixed(2)}</strong> Hz</div>
+                <div style=\"padding:8px;border:1px solid #374151;border-radius:6px\">$f_1$ = <strong>${f1.toFixed(2)}</strong> Hz</div>
+            </div>
+        `;
+        if(typeof MathJax!=='undefined' && MathJax.typesetPromise) MathJax.typesetPromise([infoDisplay]).catch(()=>{});
+    }
+
+    function drawBitSeparators(ctxs, numBits, N, Tb, timeDuration){
+        const samplesPerBit = N/numBits;
+        ctxs.forEach(ctx=>{
+            ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1;
+            for(let i=1;i<numBits;i++){
+                const x = (i * samplesPerBit / N) * ctx.canvas.width;
+                ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,ctx.canvas.height); ctx.stroke();
+            }
+            ctx.restore();
+        });
+    }
+
+    // events
+    cyclesSlider.addEventListener('input', ()=>{ cyclesValue.textContent=cyclesSlider.value; renderAll(); });
+    deltaSlider.addEventListener('input', ()=>{ deltaValue.textContent=deltaSlider.value; renderAll(); });
+    bitRateInput.addEventListener('input', ()=>{ document.getElementById('bit_rate_value').textContent = parseFloat(bitRateInput.value).toFixed(1)+' Bits/s'; renderAll(); });
+    carrierAmpInput.addEventListener('input', ()=>{ document.getElementById('carrier_amplitude_value').textContent = parseFloat(carrierAmpInput.value).toFixed(1)+' V'; renderAll(); });
+    sampleRateInput.addEventListener('input', ()=>{ document.getElementById('sample_rate_value').textContent = sampleRateInput.value; renderAll(); });
+
+    refreshBtn.addEventListener('click', ()=>{ bits = randomBits(numBits); showBits(); renderAll(); });
+
+    window.addEventListener('resize', resize);
+    window.onload = ()=>{ showBits(); resize(); };
+
+})();
+</script>
+
+</body>
+</html>
