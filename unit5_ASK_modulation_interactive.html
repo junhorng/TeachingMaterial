@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASK 調幅鍵控互動教材（含 Refresh 與 cycles/bit）</title>
+    
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- MathJax 設定 -->
+    <script>
+        window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #121212; color: #e0e0e0; }
+        .canvas-container { border:2px solid #5d5dff; background:#1e1e1e; border-radius:.75rem; margin-bottom:1rem; padding:8px; }
+        canvas { width:100%; height:auto; display:block; border-radius:.625rem; }
+        .bit-pill { font-family: 'Courier New', monospace; padding:.25rem .5rem; border-radius:.25rem; background:rgba(255,255,255,0.04); }
+        .bit-1 { background:#16a34a; color:white; }
+        .bit-0 { background:#374151; color:#d1d5db; }
+        .control-row { display:flex; gap:1rem; align-items:center; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:#f7a855; }
+        .btn { padding:.4rem .75rem; border-radius:.375rem; cursor:pointer; border: none; }
+        .btn-refresh { background:#10b981; color:white; }
+    </style>
+</head>
+<body>
+
+<div class="min-h-screen p-6 flex flex-col items-center">
+    <header class="text-center mb-6">
+        <h1 class="text-3xl font-extrabold text-[#78c9ff] mb-1">數位調變：振幅鍵控 (ASK)</h1>
+        <h1 class="text-2xl font-extrabold text-[#78c9ff] mb-1">作者：亞東科技大學通訊工程系 陳俊宏</h1>
+    </header>
+
+    <div class="w-full max-w-7xl space-y-6">
+
+        <!-- 資料控制區塊 -->
+        <div class="bg-gray-800 p-4 rounded-xl shadow-2xl">
+            <h2 class="text-xl font-semibold text-pink-400 mb-3">資料控制</h2>
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <button id="refreshBits" class="btn btn-refresh">🔄 重新產生 10 個位元</button>
+                    <div>
+                        <div class="text-sm text-gray-300">當前數位資料序列 (10 bits)</div>
+                        <div id="bitSequenceDisplay" class="mt-2 flex gap-2 flex-wrap"></div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <label class="text-sm text-gray-300">每個位元包含的載波週期 (cycles / bit)</label>
+                    <input id="cycles_per_bit" type="range" min="2" max="20" step="1" value="5">
+                    <div id="cycles_value" class="text-white font-bold">5</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 三個波形 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+                <h3 class="text-lg font-semibold text-yellow-300 mb-2">數位資料 $b(t)$</h3>
+                <div class="canvas-container"><canvas id="dataCanvas" height="150"></canvas></div>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-yellow-300 mb-2">載波 $c(t)$</h3>
+                <div class="canvas-container"><canvas id="carrierCanvas" height="150"></canvas></div>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-yellow-300 mb-2">ASK 訊號 $s(t)$</h3>
+                <div class="canvas-container"><canvas id="askCanvas" height="150"></canvas></div>
+            </div>
+        </div>
+
+        <!-- 參數控制面板 -->
+        <div class="bg-gray-800 p-4 rounded-xl shadow-2xl">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-400">參數控制面板</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm text-purple-300 mb-2">載波振幅 $A$ (V)</label>
+                    <input id="carrier_amplitude" type="range" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full">
+                    <p id="carrier_amplitude_value" class="mt-2 text-center">1.0 V</p>
+                </div>
+                <div>
+                    <label class="block text-sm text-purple-300 mb-2">位元速率 $R_b$ (Bits/s)</label>
+                    <input id="bit_rate" type="range" min="1.0" max="5.0" step="0.5" value="2.0" class="w-full">
+                    <p id="bit_rate_value" class="mt-2 text-center">2.0 Bits/s</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 資訊面板 -->
+        <div id="infoDisplay" class="bg-gray-800 p-4 rounded-xl shadow-2xl text-sm font-mono flex flex-wrap justify-around">
+            <!-- 由 JS 填充 -->
+        </div>
+
+    </div>
+</div>
+
+<script>
+(function(){
+    // --- 元件 ---
+    const dataCanvas = document.getElementById('dataCanvas');
+    const carrierCanvas = document.getElementById('carrierCanvas');
+    const askCanvas = document.getElementById('askCanvas');
+    const dataCtx = dataCanvas.getContext('2d');
+    const carCtx = carrierCanvas.getContext('2d');
+    const askCtx = askCanvas.getContext('2d');
+
+    const carrierAmpInput = document.getElementById('carrier_amplitude');
+    const bitRateInput = document.getElementById('bit_rate');
+    const bitSequenceDisplay = document.getElementById('bitSequenceDisplay');
+    const refreshBitsBtn = document.getElementById('refreshBits');
+    const cyclesSlider = document.getElementById('cycles_per_bit');
+    const cyclesValue = document.getElementById('cycles_value');
+    const infoDisplay = document.getElementById('infoDisplay');
+
+    // --- 參數 ---
+    let A = parseFloat(carrierAmpInput.value);
+    let Rb = parseFloat(bitRateInput.value);
+    let cyclesPerBit = parseInt(cyclesSlider.value, 10); // 新增參數
+    let fc = Rb * cyclesPerBit; // 載波頻率 = Rb * cyclesPerBit
+
+    // 數位序列（10 bits）
+    let numBits = 10;
+    let bitSequence = generateRandomBitSequence(numBits);
+
+    // 取樣設定
+    let sampleRate = 1000; // sample/s
+    let timeDuration = numBits / Rb;
+    let numSamples = Math.round(sampleRate * timeDuration);
+    let canvasWidth, canvasHeight;
+
+    // ---------- helper ----------
+    function generateRandomBitSequence(length){
+        const seq = [];
+        for(let i=0;i<length;i++) seq.push(Math.round(Math.random()));
+        return seq;
+    }
+
+    function displayBitSequence(){
+        bitSequenceDisplay.innerHTML = '';
+        bitSequence.forEach(b=>{
+            const span = document.createElement('div');
+            span.className = 'bit-pill ' + (b? 'bit-1':'bit-0');
+            span.textContent = b;
+            bitSequenceDisplay.appendChild(span);
+        });
+    }
+
+    function resizeAllCanvases(){
+        const parentDiv = dataCanvas.parentElement.parentElement;
+        canvasWidth = parentDiv.clientWidth;
+        canvasHeight = 150;
+        [dataCanvas, carrierCanvas, askCanvas].forEach(c => { c.width = canvasWidth; c.height = canvasHeight; });
+        updateSimulationAndRender();
+    }
+
+    function drawSignal(ctx, data, color, yRange){
+        if(!data || data.length===0) return;
+        ctx.clearRect(0,0,canvasWidth,canvasHeight);
+        const mid = canvasHeight/2;
+        // center line
+        ctx.beginPath(); ctx.strokeStyle = '#374151'; ctx.lineWidth = 1;
+        ctx.moveTo(0, mid); ctx.lineTo(canvasWidth, mid); ctx.stroke();
+
+        // waveform
+        ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2;
+        const scaleY = (mid*0.8)/yRange;
+        ctx.moveTo(0, mid - data[0]*scaleY);
+        for(let i=1;i<data.length;i++){
+            const x = (i/data.length)*canvasWidth;
+            const y = mid - data[i]*scaleY;
+            ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+
+        // draw bit separators
+        const Tb = 1.0 / Rb;
+        const timePerSample = timeDuration / numSamples;
+        const samplesPerBit = Tb / timePerSample;
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+        for(let i=1;i<numBits;i++){
+            const x = (i * samplesPerBit / numSamples) * canvasWidth;
+            ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvasHeight); ctx.stroke();
+        }
+    }
+
+    function updateSimulationAndRender(){
+        // recalculations
+        timeDuration = numBits / Rb;
+        numSamples = Math.round(sampleRate * timeDuration);
+        fc = Rb * cyclesPerBit; // 基於 cyclesPerBit 計算載波頻率
+
+        // --- data signal b(t)
+        const dataSignal = new Array(numSamples);
+        const Tb = 1.0 / Rb;
+        for(let i=0;i<numSamples;i++){
+            const t = i / sampleRate;
+            const bitIndex = Math.floor(t / Tb);
+            dataSignal[i] = bitSequence[bitIndex] || 0;
+        }
+        drawSignal(dataCtx, dataSignal, '#f59e0b', 1.2);
+
+        // --- carrier
+        const carrierSignal = new Array(numSamples);
+        for(let i=0;i<numSamples;i++){
+            const t = i / sampleRate;
+            carrierSignal[i] = A * Math.cos(2*Math.PI*fc*t);
+        }
+        drawSignal(carCtx, carrierSignal, '#60a5fa', A);
+
+        // --- ASK
+        const askSignal = new Array(numSamples);
+        for(let i=0;i<numSamples;i++){
+            askSignal[i] = dataSignal[i] * carrierSignal[i];
+        }
+        drawSignal(askCtx, askSignal, '#c084fc', A);
+
+        updateInfoDisplay();
+    }
+
+    function updateInfoDisplay(){
+        const Tb = 1.0 / Rb;
+        infoDisplay.innerHTML = `
+            <div class="p-3 border border-gray-600 rounded-md">
+                <p class="text-sm text-gray-400">ASK 調變公式</p>
+                <p class="text-lg text-green-400">$$s(t)=b(t)\\cdot A\\cos(2\\pi f_c t)$$</p>
+            </div>
+            <div class="p-3 border border-gray-600 rounded-md">
+                <p class="text-sm text-gray-400">位元持續時間 $T_b$</p>
+                <p class="text-lg text-yellow-400">${Tb.toFixed(2)} \\text{s}</p>
+            </div>
+            <div class="p-3 border border-gray-600 rounded-md">
+                <p class="text-sm text-gray-400">載波頻率 $f_c = R_b \\times (cycles/bit)$</p>
+                <p class="text-lg text-blue-400">${fc.toFixed(2)} \\text{Hz}</p>
+            </div>
+            <div class="p-3 border border-gray-600 rounded-md">
+                <p class="text-sm text-gray-400">每位元的載波週期 (cycles/bit)</p>
+                <p class="text-lg text-pink-400">${cyclesPerBit}</p>
+            </div>
+        `;
+        if(typeof MathJax !== 'undefined' && MathJax.typesetPromise){
+            MathJax.typesetPromise([infoDisplay]).catch(e=>console.log(e));
+        }
+    }
+
+    // --- event handlers ---
+    carrierAmpInput.addEventListener('input', ()=>{ A = parseFloat(carrierAmpInput.value); document.getElementById('carrier_amplitude_value').textContent = A.toFixed(1)+" V"; updateSimulationAndRender(); });
+    bitRateInput.addEventListener('input', ()=>{ Rb = parseFloat(bitRateInput.value); document.getElementById('bit_rate_value').textContent = Rb.toFixed(1)+" Bits/s"; updateSimulationAndRender(); });
+
+    cyclesSlider.addEventListener('input', ()=>{ cyclesPerBit = parseInt(cyclesSlider.value,10); cyclesValue.textContent = cyclesPerBit; updateSimulationAndRender(); });
+
+    refreshBitsBtn.addEventListener('click', ()=>{ bitSequence = generateRandomBitSequence(numBits); displayBitSequence(); updateSimulationAndRender(); });
+
+    // --- init ---
+    window.addEventListener('resize', resizeAllCanvases);
+    window.onload = ()=>{ displayBitSequence(); resizeAllCanvases(); };
+
+})();
+</script>
+
+</body>
+</html>
