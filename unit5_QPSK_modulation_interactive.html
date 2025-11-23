@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QPSK 教學互動模擬器</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- MathJax (已包含您建議的行內公式設定) -->
+    <script>
+        window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        body { background:#0f172a; color:#e5e7eb; font-family:Inter, sans-serif; }
+        .container { max-width:1100px; margin:24px auto; padding:16px; }
+        .card { background:#111827; border:1px solid rgba(99,102,241,0.12); border-radius:12px; padding:12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); }
+        canvas { width:100%; height:auto; display:block; border-radius:8px; }
+        /* 調整位元顯示，每兩個位元代表一個符元 */
+        .bit-pill { font-family:monospace; padding:.25rem .5rem; border-radius:.25rem; font-weight: bold; transition: background-color 0.2s; }
+        .bit-1 { background:#16a34a; color:white; } /* +1 */
+        .bit-0 { background:#dc2626; color:white; } /* -1 */
+        .btn { padding:.4rem .75rem; border-radius:.375rem; cursor:pointer; border:none; transition: background-color 0.2s; }
+        .btn-refresh { background:#06b6d4; color:white; }
+        .btn-refresh:hover { background:#0891b2; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="mb-6 text-center">
+        <h1 class="text-3xl font-bold text-sky-300">QPSK 教學互動模擬器（四相位移鍵控）</h1>
+        <h1 class="text-2xl font-extrabold text-[#78c9ff] mb-1">作者：亞東科技大學通訊工程系 陳俊宏</h1>
+        <p class="text-sm text-gray-400">QPSK 將每 2 個位元 ($T_s=2T_b$) 組合為一個符元，並同時在 $I$ (同相) 和 $Q$ (正交) 兩個分量上調變載波。</p>
+        <p class="text-sm text-gray-400">載波頻率 $f_c$ 固定為 $5 \times$ 位元速率 $R_b$ ($f_c = 10 R_s$)。我們使用極性 NRZ 碼 $(0\to+1, 1\to-1)$。</p>
+    </header>
+
+    <div class="card mb-6">
+        <h2 class="text-lg text-pink-300 mb-3">資料與符元控制</h2>
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <button id="refreshBits" class="btn btn-refresh">🔄 重新產生 12 個位元 (6 符元)</button>
+                <div>
+                    <div class="text-sm text-gray-300">原始數位序列 ($b_k$)</div>
+                    <div id="bitSequenceDisplay" class="mt-2 flex gap-2 flex-wrap"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2x2 Grid for 4 Canvases -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="card">
+            <h3 class="text-yellow-300 mb-2">I-通道極性 NRZ 訊號 $I(t)$</h3>
+            <p class="text-xs text-gray-400 mb-1">對應序列中的奇數位元 ($b_1, b_3, \dots$)</p>
+            <canvas id="iCanvas" height="140"></canvas>
+        </div>
+        <div class="card">
+            <h3 class="text-yellow-300 mb-2">Q-通道極性 NRZ 訊號 $Q(t)$</h3>
+            <p class="text-xs text-gray-400 mb-1">對應序列中的偶數位元 ($b_2, b_4, \dots$)</p>
+            <canvas id="qCanvas" height="140"></canvas>
+        </div>
+        <div class="card">
+            <h3 class="text-yellow-300 mb-2">同相載波 $c_I(t) = \cos(2\pi f_c t)$</h3>
+            <canvas id="iCarrierCanvas" height="140"></canvas>
+        </div>
+        <div class="card">
+            <h3 class="text-yellow-300 mb-2">正交載波 $c_Q(t) = -\sin(2\pi f_c t)$</h3>
+            <canvas id="qCarrierCanvas" height="140"></canvas>
+        </div>
+    </div>
+    
+    <div class="card mb-6">
+        <h3 class="text-green-300 mb-2 text-xl font-bold">QPSK 輸出訊號 $s(t)$</h3>
+        <p class="text-xs text-gray-400 mb-2">相位 $\phi_k = \tan^{-1}(Q/I)$</p>
+        <!-- 已將 ID 從 bpskCanvas 修正為 qpskSignalCanvas -->
+        <canvas id="qpskSignalCanvas" height="140"></canvas>
+    </div>
+
+    <div class="card mb-6">
+        <h2 class="text-lg text-indigo-300 mb-2">參數控制</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm text-purple-300 mb-1">載波振幅 $A$ (V)</label>
+                <input id="carrier_amplitude" type="range" min="0.2" max="2.0" step="0.1" value="1.0" class="w-full">
+                <div id="carrier_amplitude_value" class="mt-1 text-center font-bold">1.0 V</div>
+            </div>
+            <div>
+                <label class="block text-sm text-purple-300 mb-1">位元速率 $R_b$ (Bits/s)</label>
+                <input id="bit_rate" type="range" min="1" max="8" step="0.5" value="2" class="w-full">
+                <div id="bit_rate_value" class="mt-1 text-center font-bold">2.0 Bits/s</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="infoDisplay" class="card text-sm font-mono p-3"></div>
+</div>
+
+<script>
+(function(){
+    // 固定參數
+    const NUM_BITS = 12; // 必須是偶數，產生 6 個符元
+    const FIXED_CYCLES_PER_BIT = 5; // f_c = 5 * R_b
+    const FIXED_SAMPLE_RATE = 2000; // 提高取樣率以獲得更平滑的波形
+
+    // elements and contexts
+    const iCanvas = document.getElementById('iCanvas');
+    const qCanvas = document.getElementById('qCanvas');
+    const iCarrierCanvas = document.getElementById('iCarrierCanvas');
+    const qCarrierCanvas = document.getElementById('qCarrierCanvas');
+    // 修正：使用正確的 Canvas ID
+    const qpskCanvas = document.getElementById('qpskSignalCanvas'); 
+
+    const iCtx = iCanvas.getContext('2d');
+    const qCtx = qCanvas.getContext('2d');
+    const iCarCtx = iCarrierCanvas.getContext('2d');
+    const qCarCtx = qCarrierCanvas.getContext('2d');
+    const qpskCtx = qpskCanvas.getContext('2d');
+
+    const refreshBtn = document.getElementById('refreshBits');
+    const bitDisplay = document.getElementById('bitSequenceDisplay');
+    const carrierAmpInput = document.getElementById('carrier_amplitude');
+    const bitRateInput = document.getElementById('bit_rate');
+    const infoDisplay = document.getElementById('infoDisplay');
+
+    // params
+    let bits = randomBits(NUM_BITS); // 0 or 1
+    let Rb = parseFloat(bitRateInput.value);
+    let A = parseFloat(carrierAmpInput.value);
+    let Rs = Rb / 2; // Symbol Rate
+    let fc = FIXED_CYCLES_PER_BIT * Rb;
+
+    function randomBits(n){ 
+        const a=[]; 
+        for(let i=0;i<n;i++) a.push(Math.round(Math.random())); 
+        return a; 
+    }
+
+    /**
+     * @description 顯示原始位元序列
+     */
+    function showBits(){ 
+        bitDisplay.innerHTML=''; 
+        for (let i = 0; i < bits.length; i += 2) {
+            const sym = document.createElement('span');
+            sym.className = 'flex gap-1 mr-2';
+            
+            // Bit 1 (I-channel)
+            const b1 = document.createElement('div');
+            b1.className = 'bit-pill ' + (bits[i] ? 'bit-1' : 'bit-0');
+            b1.textContent = bits[i];
+            
+            // Bit 2 (Q-channel)
+            const b2 = document.createElement('div');
+            b2.className = 'bit-pill ' + (bits[i+1] ? 'bit-1' : 'bit-0');
+            b2.textContent = bits[i+1];
+
+            sym.appendChild(b1);
+            sym.appendChild(b2);
+            bitDisplay.appendChild(sym);
+        }
+    }
+
+    /**
+     * @description 調整所有 Canvas 尺寸
+     */
+    function resize(){ 
+        // 必須檢查 qpskCanvas 是否已經被正確獲取
+        if (!qpskCanvas) return;
+        const w = iCanvas.parentElement.clientWidth; 
+        [iCanvas, qCanvas, iCarrierCanvas, qCarrierCanvas, qpskCanvas].forEach(c=>{ 
+            c.width=w; 
+            c.height=140; 
+        }); 
+        renderAll(); 
+    }
+
+    /**
+     * @description 繪製單一波形
+     */
+    function drawSignal(ctx, data, color, yRange, showSymbolBoundary=false){ 
+        if(!data || !ctx) return; // 再次檢查 ctx 避免錯誤
+        ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height); 
+        
+        const mid=ctx.canvas.height/2; // center
+        
+        // Draw center line
+        ctx.beginPath(); 
+        ctx.strokeStyle='#374151'; 
+        ctx.lineWidth=1; 
+        ctx.moveTo(0,mid); 
+        ctx.lineTo(ctx.canvas.width,mid); 
+        ctx.stroke(); 
+
+        // Draw signal
+        ctx.beginPath(); 
+        ctx.strokeStyle=color; 
+        ctx.lineWidth=2; 
+        const scaleY=(mid*0.8)/yRange; 
+        ctx.moveTo(0, mid - data[0]*scaleY); 
+        
+        for(let i=1;i<data.length;i++){ 
+            const x=(i/data.length)*ctx.canvas.width; 
+            const y=mid - data[i]*scaleY; 
+            ctx.lineTo(x,y);
+        } 
+        ctx.stroke(); 
+        
+        // Draw symbol separators
+        if (showSymbolBoundary) {
+            drawSymbolSeparators([ctx], NUM_BITS / 2, data.length, 2.0/Rb, NUM_BITS/Rb);
+        }
+    }
+
+    /**
+     * @description 繪製符元週期分隔線 (每 2 個位元)
+     */
+    function drawSymbolSeparators(ctxs, numSymbols, N, Ts, timeDuration){
+        const samplesPerSymbol = N/numSymbols;
+        ctxs.forEach(ctx=>{
+            ctx.save(); 
+            ctx.strokeStyle='rgba(99,102,241,0.2)'; // 符元邊界使用淺藍色
+            ctx.lineWidth=2; // 符元邊界較粗
+
+            for(let i=1;i<numSymbols;i++){
+                const x = (i * samplesPerSymbol / N) * ctx.canvas.width;
+                ctx.beginPath(); 
+                ctx.moveTo(x,0); 
+                ctx.lineTo(x,ctx.canvas.height); 
+                ctx.stroke();
+            }
+            ctx.restore();
+        });
+    }
+
+
+    function renderAll(){
+        // recalc parameters
+        Rb = parseFloat(bitRateInput.value);
+        A = parseFloat(carrierAmpInput.value);
+        Rs = Rb / 2;
+        fc = FIXED_CYCLES_PER_BIT * Rb; 
+
+        const Tb = 1.0/Rb; // Bit Duration
+        const Ts = 2.0/Rb; // Symbol Duration
+        const timeDuration = NUM_BITS / Rb; // Total time
+        const N = Math.round(FIXED_SAMPLE_RATE * timeDuration); // Total samples
+
+        // --- 1. I/Q 極性 NRZ 資料 b'(t) (-1 or +1) ---
+        const I_baseband = new Array(N); // I-channel (odd bits)
+        const Q_baseband = new Array(N); // Q-channel (even bits)
+        
+        for(let i=0;i<N;i++){ 
+            const t=i/FIXED_SAMPLE_RATE; 
+            // 找出當前時間 t 落在第幾個符元
+            const symbolIndex = Math.floor(t/Ts); 
+            // 該符元對應的位元索引 (奇數 I, 偶數 Q)
+            const I_bitIndex = symbolIndex * 2;
+            const Q_bitIndex = symbolIndex * 2 + 1;
+            
+            // 轉換： 0 -> +1, 1 -> -1 
+            const I_bit = bits[I_bitIndex] || 0;
+            const Q_bit = bits[Q_bitIndex] || 0;
+
+            I_baseband[i] = (I_bit === 0) ? 1.0 : -1.0; 
+            Q_baseband[i] = (Q_bit === 0) ? 1.0 : -1.0;
+        }
+
+        // 繪製 I/Q 資料
+        drawSignal(iCtx, I_baseband, '#38bdf8', 1.2, true); // I-channel: 藍色
+        drawSignal(qCtx, Q_baseband, '#fb923c', 1.2, true); // Q-channel: 橘色
+
+        // --- 2. 載波訊號 c_I(t) & c_Q(t) ---
+        const carrierI = new Array(N);
+        const carrierQ = new Array(N);
+        for(let i=0;i<N;i++){ 
+            const t=i/FIXED_SAMPLE_RATE; 
+            // c_I(t) = A * cos(2 * pi * fc * t)
+            carrierI[i]=A*Math.cos(2*Math.PI*fc*t); 
+            // c_Q(t) = -A * sin(2 * pi * fc * t)
+            carrierQ[i]=-A*Math.sin(2*Math.PI*fc*t); 
+        }
+        // 繪製 I/Q 載波
+        drawSignal(iCarCtx, carrierI, '#4ade80', A); // I-Carrier: 綠色
+        drawSignal(qCarCtx, carrierQ, '#f472b6', A); // Q-Carrier: 粉紅色
+
+        // --- 3. QPSK 訊號 s(t) ---
+        const qpsk = new Array(N);
+        for(let i=0;i<N;i++){
+            const t=i/FIXED_SAMPLE_RATE;
+            
+            const sqrt2_inv = 1.0 / Math.sqrt(2);
+            // 訊號振幅正規化，以確保最終 QPSK 訊號的峰值振幅為 A
+            const normalized_I = I_baseband[i] * sqrt2_inv;
+            const normalized_Q = Q_baseband[i] * sqrt2_inv;
+            
+            // s(t) = A * [ I_norm * cos(wct) - Q_norm * sin(wct) ]
+            qpsk[i] = A * ( normalized_I * Math.cos(2*Math.PI*fc*t) - normalized_Q * Math.sin(2*Math.PI*fc*t) );
+        }
+        
+        // 修正：啟用符元邊界顯示
+        drawSignal(qpskCtx, qpsk, '#c084fc', A, true); 
+
+        // update info panel
+        infoDisplay.innerHTML = `
+            <div style="padding:8px;border:1px solid #374151;border-radius:6px;margin-bottom:6px;">QPSK 調變公式: $$s(t) = \\frac{A}{\\sqrt{2}} \\left[ I(t) \\cos(2\\pi f_c t) - Q(t) \\sin(2\\pi f_c t) \\right]$$</div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap"> 
+                <div style="padding:8px;border:1px solid #374151;border-radius:6px">位元速率 $R_b$ = <strong>${Rb.toFixed(1)}</strong> bits/s</div>
+                <div style="padding:8px;border:1px solid #374151;border-radius:6px">符元速率 $R_s = R_b/2$ = <strong>${Rs.toFixed(1)}</strong> Symbols/s</div>
+                <div style="padding:8px;border:1px solid #374151;border-radius:6px">載波頻率 $f_c$ = <strong>${fc.toFixed(1)}</strong> Hz ($5 R_b$)</div>
+                <div style="padding:8px;border:1px solid #374151;border-radius:6px">符元持續時間 $T_s = 2/R_b$ = <strong>${Ts.toFixed(2)}</strong> s</div>
+            </div>
+        `;
+        if(typeof MathJax!=='undefined' && MathJax.typesetPromise) MathJax.typesetPromise([infoDisplay]).catch(()=>{});
+
+        // Update slider values
+        document.getElementById('carrier_amplitude_value').textContent = A.toFixed(1) + " V";
+        document.getElementById('bit_rate_value').textContent = Rb.toFixed(1) + " Bits/s";
+    }
+
+    // events
+    bitRateInput.addEventListener('input', renderAll);
+    carrierAmpInput.addEventListener('input', renderAll);
+
+    refreshBtn.addEventListener('click', ()=>{ 
+        bits = randomBits(NUM_BITS); 
+        showBits(); 
+        renderAll(); 
+    });
+
+    window.addEventListener('resize', resize);
+    window.onload = ()=>{ 
+        showBits(); 
+        resize(); 
+    };
+
+})();
+</script>
+
+</body>
+</html>
